@@ -1,0 +1,9 @@
+services:
+  bot:
+    image: dangerblack/megabot:latest
+    build: .
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
