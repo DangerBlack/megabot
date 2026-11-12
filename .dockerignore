@@ -5,6 +5,4 @@
 !.env.example
 data/
 README.md
-deploy.env
-deploy.sh
 *.swp

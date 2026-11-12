@@ -78,11 +78,11 @@ func TestFormatUsers(t *testing.T) {
 	five := 5.0
 	list := []database.UserSummary{
 		{User: database.User{ID: 2, Username: "bob", Status: database.StatusPending}},
-		{User: database.User{ID: 1, Name: "Dan", Username: "dan", Status: database.StatusApproved, LLM: "mimir"}, MonthUSD: 1.5, Requests: 10},
+		{User: database.User{ID: 1, Name: "Dan", Username: "dan", Status: database.StatusApproved, LLM: "local"}, MonthUSD: 1.5, Requests: 10},
 		{User: database.User{ID: 3, Name: "Eve", Status: database.StatusApproved, BudgetUSD: &five}, MonthUSD: 0.25},
 	}
 	got := formatUsers(list, 1, "openai")
-	for _, want := range []string{"⏳ @bob", "✅ Dan @dan 👑", "mese $1.50 / ∞", "10 richieste · mimir", "mese $0.25 / $5", "· openai"} {
+	for _, want := range []string{"⏳ @bob", "✅ Dan @dan 👑", "mese $1.50 / ∞", "10 richieste · local", "mese $0.25 / $5", "· openai"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
@@ -92,11 +92,11 @@ func TestFormatUsers(t *testing.T) {
 func TestFormatUsage(t *testing.T) {
 	rows := []database.UsageRow{
 		{UserID: 1, UserName: "dan", Kind: "audio", Provider: "openai", Count: 3, MonthUSD: 0.02, TotalUSD: 0.05},
-		{UserID: 1, UserName: "dan", Kind: "text", Provider: "mimir", Count: 1},
+		{UserID: 1, UserName: "dan", Kind: "text", Provider: "local", Count: 1},
 		{UserID: 2, UserName: "bob", Kind: "image", Provider: "openai", Count: 1, TotalUSD: 0.04},
 	}
 	got := formatUsage(rows)
-	for _, want := range []string{"👤 dan · mese $0.02 · totale $0.05", "audio (openai): 3", "text (mimir): 1", "👤 bob · mese $0 · totale $0.04"} {
+	for _, want := range []string{"👤 dan · mese $0.02 · totale $0.05", "audio (openai): 3", "text (local): 1", "👤 bob · mese $0 · totale $0.04"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}

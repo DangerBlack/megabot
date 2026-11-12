@@ -8,7 +8,7 @@ import (
 )
 
 // Kind is what a message asks for. The string values are what gets logged in
-// the usage table (same names the n8n workflow used, plus "image-raw" and "ocr").
+// the usage table.
 type Kind string
 
 const (

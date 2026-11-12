@@ -177,7 +177,7 @@ type harness struct {
 	tg    *Telegram
 	api   *fakeTelegram
 	oai   *fakeLLM
-	mimir *fakeLLM
+	local *fakeLLM
 	upd   int
 	msgID int
 }
@@ -185,7 +185,7 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	api := newFakeTelegram(t)
 	oai := newFakeLLM(t, "risposta openai")
-	mimir := newFakeLLM(t, "risposta mimir")
+	local := newFakeLLM(t, "risposta local")
 	bot, err := telebot.NewBot(telebot.Settings{Token: tgToken, URL: api.srv.URL, Offline: true, Synchronous: true,
 		OnError: func(err error, c telebot.Context) { t.Errorf("handler error: %v", err) }})
 	if err != nil {
@@ -200,9 +200,9 @@ func newHarness(t *testing.T) *harness {
 		RootUserID: rootID,
 		Providers: map[string]config.Provider{
 			"openai": {Name: "openai", BaseURL: oai.srv.URL, APIKey: "k", ChatModel: "gpt-chat", SummaryModel: "gpt-sum", VisionModel: "gpt-vis", PriceIn: 1, PriceOut: 10},
-			"mimir":  {Name: "mimir", BaseURL: mimir.srv.URL, APIKey: "k", ChatModel: "vllm/mimir", SummaryModel: "vllm/mimir", VisionModel: "vllm/mimir-vision"},
+			"local":  {Name: "local", BaseURL: local.srv.URL, APIKey: "k", ChatModel: "vllm/local", SummaryModel: "vllm/local", VisionModel: "vllm/local-vision"},
 		},
-		ProviderOrder:         []string{"openai", "mimir"},
+		ProviderOrder:         []string{"openai", "local"},
 		DefaultLLM:            "openai",
 		TranscribeProvider:    "openai",
 		TranscribeModel:       "whisper-1",
@@ -218,7 +218,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	tg := New(bot, db, cfg)
 	tg.SetupHandlers()
-	return &harness{t: t, tg: tg, api: api, oai: oai, mimir: mimir, msgID: 1}
+	return &harness{t: t, tg: tg, api: api, oai: oai, local: local, msgID: 1}
 }
 
 func user(id int64, name string) *telebot.User {
@@ -363,10 +363,10 @@ func TestBudgetBlocksPaidButNotFree(t *testing.T) {
 		t.Fatal("paid provider called over budget")
 	}
 
-	h.text(bob, "/llm mimir")
-	mustContain(t, sentTo(h.api.take(), bobID), "Ora uso mimir")
+	h.text(bob, "/llm local")
+	mustContain(t, sentTo(h.api.take(), bobID), "Ora uso local")
 	h.text(bob, "ciao")
-	mustContain(t, sentTo(h.api.take(), bobID), "risposta mimir")
+	mustContain(t, sentTo(h.api.take(), bobID), "risposta local")
 
 	// root has no budget
 	h.text(user(rootID, "root"), "ciao")

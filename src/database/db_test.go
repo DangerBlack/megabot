@@ -59,10 +59,10 @@ func TestAccessRequestFlow(t *testing.T) {
 func TestEnsureApprovedAndLLM(t *testing.T) {
 	db := newTestDB(t)
 	db.EnsureApproved(1, "root", "Root")
-	db.SetLLM(1, "mimir")
+	db.SetLLM(1, "local")
 	db.EnsureApproved(1, "root2", "Root")
 	u, _ := db.GetUser(1)
-	if u.Status != StatusApproved || u.Username != "root2" || u.LLM != "mimir" {
+	if u.Status != StatusApproved || u.Username != "root2" || u.LLM != "local" {
 		t.Fatalf("%+v", u)
 	}
 }
@@ -76,7 +76,7 @@ func TestUsageCostsAndStats(t *testing.T) {
 	}
 	log(1, "audio", "openai", 0.01)
 	log(1, "audio", "openai", 0.02)
-	log(1, "text", "mimir", 0)
+	log(1, "text", "local", 0)
 	log(2, "image", "openai", 0.04)
 	db.db.Exec(`UPDATE usage SET created_at = '2000-01-01' WHERE kind = 'image'`) // last century: not this month
 

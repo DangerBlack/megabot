@@ -25,7 +25,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// Same browser headers the n8n workflow used, so sites that block bots behave the same.
+// Browser-like headers: many sites refuse requests that look like bots.
 // Accept-Encoding is left to net/http so gzip is decoded transparently.
 var browserHeaders = map[string]string{
 	"User-Agent":      "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0",

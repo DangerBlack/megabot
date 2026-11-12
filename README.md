@@ -1,52 +1,55 @@
 # megabot
 
-Assistente personale su Telegram con modelli compatibili OpenAI: OpenAI, Mimir aziendale o qualsiasi endpoint `/v1`. Sostituisce il workflow n8n "Openai workflow".
+A self-hosted personal assistant for Telegram, backed by any OpenAI-compatible API: OpenAI itself, or your own server (vLLM, Ollama, LM Studio, LiteLLM …). One small Go binary, one SQLite file.
 
-| Cosa mandi | Cosa fa |
+| Send the bot | What it does |
 |---|---|
-| 🎙 vocale o file audio | trascrizione; se è lunga, il bottone **📝 Riassumi** |
-| 🔗 messaggio con un link | riassunto della pagina; **rispondi al riassunto** per fare domande sull'articolo |
-| 📷 foto senza didascalia | trascrive il testo nella foto (OCR) |
-| 📷 foto con didascalia | la didascalia è la domanda sulla foto ("quanto costa in totale?", "traduci") |
-| `/image <prompt>` / `/image-raw <prompt>` | genera un'immagine, come foto o come file PNG |
-| `/gpt <domanda>` (in privato basta scrivere) | risposta testuale |
-| ↩️ risposta a un messaggio del bot | continua la conversazione (anche nei gruppi) |
-| `/llm [nome]` | mostra o cambia il provider di testo e foto |
-| `/usage` | richieste e spesa del mese (l'amministratore vede tutti) |
+| 🎙 a voice note or audio file | transcribes it; long transcripts get a **📝 Riassumi** (summarize) button |
+| 🔗 a message with a link | summarizes the page; **reply to the summary** to ask questions about it |
+| 📷 a photo without caption | transcribes the text in the photo (OCR) |
+| 📷 a photo with a caption | answers the caption about the photo ("what's the total?", "translate this") |
+| `/image <prompt>` · `/image_raw <prompt>` | generates an image, as a photo or as a PNG file |
+| `/gpt <question>` (in private chats just write) | answers in text |
+| ↩️ a reply to one of its messages | continues the conversation, also in groups |
+| `/llm [name]` | shows or switches the model provider used for text and photos |
+| `/usage` | requests and spending this month |
 
-## Accesso
-- `ROOT_USER_ID` è l'amministratore: ha accesso completo e nessun budget.
-- Chiunque altro scrive **`/login`**. All'amministratore arriva la richiesta con i bottoni **✅ Accetta** (budget `DEFAULT_USER_BUDGET_USD`/mese), **♾ Senza limite** e **❌ Rifiuta**.
-- Comandi dell'amministratore: `/users`, `/revoke <id>`, `/budget <id> <usd|none>`.
-- Chi non è autorizzato riceve solo l'indicazione di usare `/login`. I rifiutati vengono ignorati, e nei gruppi il bot tace.
+> The bot talks to users in **Italian**.
 
-## Costi e budget
-Ogni richiesta registra provider, modello, token, secondi di audio e immagini generate, più il **costo stimato** calcolato dai prezzi in `.env`. I prezzi OpenAI di default sono stime da verificare. Quando un utente supera il budget mensile, le funzioni a pagamento si fermano. I provider con prezzo 0, come Mimir, restano utilizzabili, e il bot suggerisce `/llm`.
+## Access control
+- `ROOT_USER_ID` is the administrator: full access, no budget.
+- Anyone else sends **`/login`**; the administrator gets the request with **✅ Accept** (monthly budget `DEFAULT_USER_BUDGET_USD`), **♾ No limit** and **❌ Reject** buttons.
+- Admin commands: `/users`, `/revoke <id>`, `/budget <id> <usd|none>`.
+- Unknown users only get a hint to use `/login`; rejected users are ignored; in groups the bot stays silent unless an approved user talks to it.
 
-## Riassunto delle pagine
-1. GET con header da browser;
-2. estrazione del contenuto principale con [Readability](https://codeberg.org/readeck/go-readability), con goquery come riserva;
-3. eliminazione delle righe ripetute (menu, banner dei cookie) e compattazione degli spazi;
-4. se il sito blocca (401/403/429/503, pagina di verifica, pagina solo JavaScript) e `FETCH_FALLBACK=jina`, nuovo tentativo tramite r.jina.ai;
-5. taglio a `SUMMARY_MAX_CHARS`, tenendo il 70% iniziale e il 30% finale.
+## Costs and budgets
+Every request is logged with provider, model, tokens, audio seconds and generated images, plus an **estimated cost** computed from the prices in `.env` (the defaults are estimates: check your provider's price list). When a user exceeds the monthly budget, paid features stop; providers priced at 0 (e.g. your own server) keep working, and the bot suggests `/llm`.
 
-## Configurazione
-Vedi `.env.example`. Sono obbligatori `TOKEN`, `ROOT_USER_ID` e almeno un provider: `OPENAI_API_KEY` e/o `LLM_PROVIDERS`. Trascrizione e immagini usano `TRANSCRIBE_PROVIDER` / `IMAGE_PROVIDER` (per default `openai`); senza OpenAI quelle funzioni vengono disattivate.
+## Web page summaries
+1. GET with browser-like headers;
+2. main content extracted with [Readability](https://codeberg.org/readeck/go-readability) (goquery as a fallback);
+3. repeated lines (menus, cookie banners) dropped and whitespace squeezed;
+4. if the site blocks the request (401/403/429/503, challenge page, JavaScript-only page) and `FETCH_FALLBACK=jina`, one retry through r.jina.ai;
+5. cut to `SUMMARY_MAX_CHARS`, keeping the first 70% and the last 30%.
 
-## Sviluppo
+## Quick start
 ```bash
-go test ./...          # unit test + test end-to-end con finti Telegram e OpenAI
+mkdir megabot && cd megabot
+curl -O https://raw.githubusercontent.com/DangerBlack/megabot/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/DangerBlack/megabot/main/.env.example
+# edit .env: TOKEN, ROOT_USER_ID and at least one provider
+docker compose up -d
+```
+Images are published for amd64 and arm64 as `dangerblack/megabot`. Data (users, usage log, conversation messages) lives in `./data/megabot.sqlite`; messages are deleted after `MESSAGE_RETENTION_DAYS`.
+
+The bot uses long polling, so it needs no open ports. A Telegram token can have only one consumer: stop any other bot or webhook that uses the same token first, or the bot gets `409 Conflict`.
+
+## Configuration
+Everything is in [`.env.example`](.env.example). Required: `TOKEN`, `ROOT_USER_ID` and at least one provider (`OPENAI_API_KEY` and/or `LLM_PROVIDERS`). Transcription and image generation use `TRANSCRIBE_PROVIDER` / `IMAGE_PROVIDER` (default `openai`); without one, those features are turned off and the rest keeps working.
+
+## Development
+```bash
+go test ./...          # unit tests + end-to-end tests against fake Telegram and OpenAI servers
 go run ./src/main.go
 ```
-
-## Deploy
-Il push su `main` costruisce `dangerblack/megabot` per amd64 e arm64 (GitHub Actions). Per avviarlo: `docker compose up -d`.
-Senza registry: `cp deploy.env.example deploy.env`, poi `./deploy.sh copia` (costruisce l'immagine e la copia via ssh), `./deploy.sh avvia`, `./deploy.sh log` e `./deploy.sh rollback`.
-Il database `data/megabot.sqlite` contiene utenti, log d'uso e i messaggi delle conversazioni. Questi ultimi vengono cancellati dopo `MESSAGE_RETENTION_DAYS`.
-
-## Migrazione da n8n
-Un token Telegram ammette **un solo** consumatore di aggiornamenti. Finché il workflow n8n è attivo, il long polling riceve `409 Conflict`. Per passare a megabot:
-1. disattiva "Openai workflow" su n8n, che rimuove il webhook;
-2. avvia megabot con lo **stesso** `TOKEN`.
-
-Per tornare indietro: ferma megabot e riattiva il workflow.
+Pushing to `main` builds and publishes the Docker image (GitHub Actions).
