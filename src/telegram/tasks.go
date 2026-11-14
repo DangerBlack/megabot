@@ -8,7 +8,6 @@ import (
 	"io"
 	"megabot/src/database"
 	"megabot/src/openai"
-	"mime"
 	"strings"
 	"unicode/utf8"
 
@@ -197,18 +196,20 @@ func (t *Telegram) transcribe(ctx context.Context, c telebot.Context, m *telebot
 	if l == nil {
 		return spend{}, errDisabled
 	}
-	var f telebot.File
-	var seconds int
-	filename := "voice.ogg"
-	if m.Voice != nil {
-		f, seconds = m.Voice.File, m.Voice.Duration
-	} else {
-		f, seconds = m.Audio.File, m.Audio.Duration
-		filename = audioFilename(m.Audio.FileName, m.Audio.MIME)
+	f, seconds, filename, ok := audioOf(m)
+	if !ok {
+		return spend{}, errors.New("nessun audio nel messaggio")
 	}
 	data, err := t.download(f)
 	if err != nil {
 		return spend{}, err
+	}
+	filename, data, probed, err := prepareAudio(ctx, filename, data)
+	if err != nil {
+		return spend{}, err
+	}
+	if seconds == 0 {
+		seconds = probed
 	}
 	text, err := l.Client.Transcribe(ctx, t.Cfg.TranscribeModel, filename, bytes.NewReader(data))
 	if err != nil {
@@ -227,17 +228,6 @@ func (t *Telegram) transcribe(ctx context.Context, c telebot.Context, m *telebot
 	sent, err := t.replyLong(c, nil, text, markup)
 	t.remember(c.Chat().ID, m.ID, replyToID(m), "[messaggio vocale]", sent)
 	return sp, err
-}
-
-// audioFilename gives the API a name with an extension it recognises.
-func audioFilename(name, mimeType string) string {
-	if name != "" && strings.Contains(name, ".") {
-		return name
-	}
-	if exts, _ := mime.ExtensionsByType(mimeType); len(exts) > 0 {
-		return "audio" + exts[0]
-	}
-	return "audio.mp3"
 }
 
 func (t *Telegram) summary(ctx context.Context, c telebot.Context, u *database.User, url string) (spend, error) {

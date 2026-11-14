@@ -1,9 +1,15 @@
 package telegram
 
 import (
+	"context"
 	"megabot/src/database"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/telebot.v3"
 )
 
 func TestHistoryMessagesMergesAndTrims(t *testing.T) {
@@ -115,5 +121,49 @@ func TestAudioFilename(t *testing.T) {
 	}
 	if audioFilename("", "") != "audio.mp3" {
 		t.Fatal("fallback")
+	}
+}
+
+func TestAudioFilenameAAC(t *testing.T) {
+	if got := audioFilename("", "audio/aac"); got != "audio.aac" {
+		t.Fatalf("aac mime: %q", got)
+	}
+	if got := audioFilename("", "audio/mp4"); got != "audio.m4a" {
+		t.Fatalf("mp4 mime: %q", got)
+	}
+}
+
+func TestIsAudioDocument(t *testing.T) {
+	cases := map[string]bool{"a.aac": true, "a.m4a": true, "a.pdf": false, "a.mp4": false}
+	for name, want := range cases {
+		if got := isAudioDocument(&telebot.Document{FileName: name}); got != want {
+			t.Errorf("%s: got %v", name, got)
+		}
+	}
+	if !isAudioDocument(&telebot.Document{FileName: "x", MIME: "audio/aac"}) {
+		t.Error("audio mime")
+	}
+}
+
+func TestPrepareAudioConvertsAAC(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	src := filepath.Join(t.TempDir(), "in.aac")
+	gen := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-c:a", "aac", src)
+	if out, err := gen.CombinedOutput(); err != nil {
+		t.Fatalf("generate aac: %v %s", err, out)
+	}
+	data, _ := os.ReadFile(src)
+	name, out, secs, err := prepareAudio(context.Background(), "nota.aac", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "nota.mp3" || len(out) == 0 || secs != 3 {
+		t.Fatalf("got %q len=%d secs=%d", name, len(out), secs)
+	}
+	name, out, _, _ = prepareAudio(context.Background(), "nota.m4a", data)
+	if name != "nota.m4a" || len(out) != len(data) {
+		t.Fatal("supported formats must pass through")
 	}
 }

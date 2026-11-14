@@ -60,6 +60,7 @@ func (t *Telegram) SetupHandlers() {
 	t.Bot.Handle(telebot.OnPhoto, t.OnMessage)
 	t.Bot.Handle(telebot.OnVoice, t.OnMessage)
 	t.Bot.Handle(telebot.OnAudio, t.OnMessage)
+	t.Bot.Handle(telebot.OnDocument, t.OnMessage)
 }
 
 const ctxUser = "user"
@@ -212,7 +213,7 @@ func (t *Telegram) OnMessage(c telebot.Context) error {
 	req := Classify(Input{
 		Text:       text,
 		HasPhoto:   m.Photo != nil,
-		HasAudio:   m.Voice != nil || m.Audio != nil,
+		HasAudio:   m.Voice != nil || m.Audio != nil || (m.Document != nil && isAudioDocument(m.Document)),
 		Private:    m.Private(),
 		ReplyToBot: m.ReplyTo != nil && m.ReplyTo.Sender != nil && t.Bot.Me != nil && m.ReplyTo.Sender.ID == t.Bot.Me.ID,
 	})

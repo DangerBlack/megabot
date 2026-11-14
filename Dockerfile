@@ -9,7 +9,7 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -o megabot ./src/main.go
 
 FROM alpine:3.24
-RUN apk --no-cache add ca-certificates sqlite-libs tzdata
+RUN apk --no-cache add ca-certificates sqlite-libs tzdata ffmpeg
 WORKDIR /app
 COPY --from=builder /app/megabot .
 
