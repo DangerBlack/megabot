@@ -9,7 +9,9 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -o megabot ./src/main.go
 
 FROM alpine:3.24
-RUN apk --no-cache add ca-certificates sqlite-libs tzdata ffmpeg
+# go-sqlite3 bundles SQLite statically: no sqlite-libs needed at runtime.
+# apk upgrade pulls security fixes released after the base image was built.
+RUN apk --no-cache upgrade && apk --no-cache add ca-certificates tzdata ffmpeg
 WORKDIR /app
 COPY --from=builder /app/megabot .
 

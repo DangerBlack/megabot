@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/telebot.v3"
 )
@@ -109,8 +110,13 @@ func prepareAudio(ctx context.Context, filename string, data []byte) (name strin
 	}
 	tmp.Close()
 
+	// Bound the conversion time and keep ffmpeg away from the network:
+	// only the local temp file and the stdout pipe may be opened.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-nostdin", "-i", tmp.Name(),
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-nostdin",
+		"-protocol_whitelist", "file,pipe", "-i", tmp.Name(),
 		"-vn", "-ac", "1", "-c:a", "libmp3lame", "-b:a", "64k", "-f", "mp3", "pipe:1")
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
