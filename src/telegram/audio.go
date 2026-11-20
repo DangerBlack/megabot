@@ -5,11 +5,8 @@ import (
 	"context"
 	"fmt"
 	"mime"
-	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -85,11 +82,9 @@ func audioFilename(name, mimeType string) string {
 	return "audio.mp3"
 }
 
-var ffmpegDurationRx = regexp.MustCompile(`Duration: (\d+):(\d+):(\d+(?:\.\d+)?)`)
-
 // prepareAudio returns the file unchanged when its format is accepted by the
 // transcription API, otherwise converts it to mono 64 kbit/s MP3 with ffmpeg.
-// seconds is the duration ffmpeg reported (0 if no conversion happened).
+// seconds is estimated from the output size (0 if no conversion happened).
 func prepareAudio(ctx context.Context, filename string, data []byte) (name string, out []byte, seconds int, err error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 	if transcribeExts[ext] {
@@ -98,26 +93,17 @@ func prepareAudio(ctx context.Context, filename string, data []byte) (name strin
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return "", nil, 0, fmt.Errorf("formato %s non supportato e ffmpeg non è installato", ext)
 	}
-	// Input goes through a temp file: some containers need a seekable input.
-	tmp, err := os.CreateTemp("", "megabot-*"+ext)
-	if err != nil {
-		return "", nil, 0, err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return "", nil, 0, err
-	}
-	tmp.Close()
-
-	// Bound the conversion time and keep ffmpeg away from the network:
-	// only the local temp file and the stdout pipe may be opened.
+	// The input is streamed on stdin and only the pipe protocol is allowed,
+	// so a crafted file (e.g. a playlist-like container) cannot make ffmpeg
+	// open local files or network URLs. Formats that need seeking (m4a/mp4)
+	// are accepted by the API as-is and never reach this point.
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-nostdin",
-		"-protocol_whitelist", "file,pipe", "-i", tmp.Name(),
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner",
+		"-protocol_whitelist", "pipe", "-i", "pipe:0",
 		"-vn", "-ac", "1", "-c:a", "libmp3lame", "-b:a", "64k", "-f", "mp3", "pipe:1")
+	cmd.Stdin = bytes.NewReader(data)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
@@ -126,12 +112,9 @@ func prepareAudio(ctx context.Context, filename string, data []byte) (name strin
 		}
 		return "", nil, 0, fmt.Errorf("conversione audio fallita: %v: %s", err, msg)
 	}
-	if m := ffmpegDurationRx.FindStringSubmatch(stderr.String()); m != nil {
-		h, _ := strconv.Atoi(m[1])
-		mi, _ := strconv.Atoi(m[2])
-		s, _ := strconv.ParseFloat(m[3], 64)
-		seconds = h*3600 + mi*60 + int(s+0.5)
-	}
+	// Output is constant 64 kbit/s, so its size gives the duration even when
+	// the piped input carries none.
+	seconds = int(float64(stdout.Len())*8/64000 + 0.5)
 	base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
 	return base + ".mp3", stdout.Bytes(), seconds, nil
 }
